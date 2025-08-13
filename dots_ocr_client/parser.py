@@ -29,6 +29,9 @@ class DotsOCRParser:
             dpi = 200, 
             min_pixels=None,
             max_pixels=None,
+            backend="vllm",
+            replicate_deployment=None,
+            replicate_api_token=None,
         ):
         self.dpi = dpi
 
@@ -43,8 +46,16 @@ class DotsOCRParser:
         self.num_thread = num_thread
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
+        # backend args
+        self.backend = backend
+        self.replicate_deployment = replicate_deployment
+        self.replicate_api_token = replicate_api_token
 
-        print(f"use vllm model, num_thread will be set to {self.num_thread}")
+        if self.backend == "replicate":
+            used = f"deployment '{self.replicate_deployment}'" if self.replicate_deployment else "public model sljeff/dots.ocr"
+            print(f"use replicate backend ({used}), num_thread={self.num_thread}")
+        else:
+            print(f"use vllm model, num_thread will be set to {self.num_thread}")
         assert self.min_pixels is None or self.min_pixels >= MIN_PIXELS
         assert self.max_pixels is None or self.max_pixels <= MAX_PIXELS
 
@@ -62,6 +73,23 @@ class DotsOCRParser:
             max_completion_tokens=self.max_completion_tokens,
         )
         return response
+
+    def _inference_with_replicate(self, image, prompt):
+        from dots_ocr_client.model.inference import inference_with_replicate
+        return inference_with_replicate(
+            image,
+            prompt,
+            deployment=self.replicate_deployment,
+            api_token=self.replicate_api_token,
+            temperature=self.temperature,
+            top_p=self.top_p,
+            max_tokens=self.max_completion_tokens,
+        )
+
+    def _inference(self, image, prompt):
+        if self.backend == "replicate":
+            return self._inference_with_replicate(image, prompt)
+        return self._inference_with_vllm(image, prompt)
 
     def get_prompt(self, prompt_mode, bbox=None, origin_image=None, image=None, min_pixels=None, max_pixels=None):
         prompt = dict_promptmode_to_prompt[prompt_mode]
@@ -98,7 +126,7 @@ class DotsOCRParser:
             image = fetch_image(origin_image, min_pixels=min_pixels, max_pixels=max_pixels)
         input_height, input_width = smart_resize(image.height, image.width)
         prompt = self.get_prompt(prompt_mode, bbox, origin_image, image, min_pixels=min_pixels, max_pixels=max_pixels)
-        response = self._inference_with_vllm(image, prompt)
+        response = self._inference(image, prompt)
         result = {'page_no': page_idx,
             "input_height": input_height,
             "input_width": input_width
@@ -272,6 +300,20 @@ def main():
         "--max_pixels", type=int, default=None,
         help=""
     )
+    # backend options
+    parser.add_argument(
+        "--backend", type=str, choices=["vllm", "replicate"], default="vllm",
+        help="backend to use for inference"
+    )
+    parser.add_argument(
+        "--replicate_deployment", type=str, default=None,
+        help="replicate deployment name, e.g., owner/name; if not set, uses public model sljeff/dots.ocr"
+    )
+    parser.add_argument(
+        "--replicate_api_token", type=str, default=None,
+        help="replicate api token; if not set, reads from REPLICATE_API_TOKEN env"
+    )
+
     args = parser.parse_args()
 
     dots_ocr_parser = DotsOCRParser(
@@ -285,6 +327,9 @@ def main():
         dpi=args.dpi,
         min_pixels=args.min_pixels,
         max_pixels=args.max_pixels,
+        backend=args.backend,
+        replicate_deployment=args.replicate_deployment,
+        replicate_api_token=args.replicate_api_token,
     )
 
     result = dots_ocr_parser.parse_file(

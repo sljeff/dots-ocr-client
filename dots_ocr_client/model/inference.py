@@ -48,3 +48,55 @@ def inference_with_vllm(
         print(f"request error: {e}")
         return None
 
+
+def inference_with_replicate(
+        image,
+        prompt,
+        *,
+        deployment: str | None = None,
+        api_token: str | None = None,
+        temperature: float = 0.1,
+        top_p: float = 0.95,
+        max_tokens: int = 2048,
+    ):
+    """
+    Run inference via Replicate. If `deployment` is provided, use the deployment API; otherwise
+    run the public model "sljeff/dots.ocr". Returns a JSON string for compatibility with
+    post_process_output which expects JSON text for layout tasks.
+    """
+    # Lazy import so users who don't use replicate don't need the package installed
+    try:
+        import replicate
+    except Exception as e:
+        raise RuntimeError("Replicate backend selected but 'replicate' package is not installed."
+                           " Install it or use backend='vllm'.") from e
+
+    if api_token:
+        os.environ["REPLICATE_API_TOKEN"] = api_token
+
+    # Convert PIL.Image to an in-memory file object accepted by Replicate
+    buf = io.BytesIO()
+    image.save(buf, format="PNG")
+    buf.name = "image.png"
+    buf.seek(0)
+
+    inputs = {
+        "image": buf,
+        "prompt": prompt,
+        "temperature": float(temperature),
+        "top_p": float(top_p),
+        "max_tokens": int(max_tokens),
+    }
+
+    if deployment:
+        dep = replicate.deployments.get(deployment)
+        pred = dep.predictions.create(input=inputs)
+        pred.wait()
+        output = pred.output
+    else:
+        # Use the public model by default for a clean UX
+        output = replicate.run("sljeff/dots.ocr", input=inputs)
+
+    # Return the JSON string directly - it's already a string from Replicate
+    return output
+
