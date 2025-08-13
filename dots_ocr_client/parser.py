@@ -83,7 +83,7 @@ class DotsOCRParser:
             api_token=self.replicate_api_token,
             temperature=self.temperature,
             top_p=self.top_p,
-            max_tokens=self.max_completion_tokens,
+            max_completion_tokens=self.max_completion_tokens,
         )
 
     def _inference(self, image, prompt):

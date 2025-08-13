@@ -49,6 +49,9 @@ def test_parse_image_with_replicate_public(mock_infer):
         args, kwargs = mock_infer.call_args
         assert kwargs["deployment"] is None  # Public model
         assert kwargs["temperature"] == 0.1
+        assert kwargs["top_p"] == 1.0
+        assert kwargs["max_completion_tokens"] == 16384
+        assert "api_token" in kwargs
     finally:
         if os.path.exists(tmp_path):
             try:
@@ -78,6 +81,9 @@ def test_parse_image_with_replicate_deployment(mock_infer):
         mock_infer.assert_called_once()
         args, kwargs = mock_infer.call_args
         assert kwargs["deployment"] == "owner/custom-deployment"
+        assert kwargs["temperature"] == 0.1
+        assert kwargs["max_completion_tokens"] == 16384
+        assert "api_token" in kwargs
     finally:
         if os.path.exists(tmp_path):
             try:

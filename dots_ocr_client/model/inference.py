@@ -57,7 +57,7 @@ def inference_with_replicate(
         api_token: str | None = None,
         temperature: float = 0.1,
         top_p: float = 0.95,
-        max_tokens: int = 2048,
+        max_completion_tokens: int = 2048,
     ):
     """
     Run inference via Replicate. If `deployment` is provided, use the deployment API; otherwise
@@ -85,7 +85,7 @@ def inference_with_replicate(
         "prompt": prompt,
         "temperature": float(temperature),
         "top_p": float(top_p),
-        "max_tokens": int(max_tokens),
+        "max_tokens": int(max_completion_tokens),
     }
 
     if deployment:
