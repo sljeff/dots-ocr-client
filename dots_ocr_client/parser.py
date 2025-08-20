@@ -19,8 +19,9 @@ class DotsOCRParser:
     """
     
     def __init__(self, 
-            ip='localhost',
-            port=8000,
+            backend="vllm",
+            base_url="http://127.0.0.1:8000",
+            api_token=None,
             model_name='model',
             temperature=0.1,
             top_p=1.0,
@@ -29,16 +30,17 @@ class DotsOCRParser:
             dpi = 200, 
             min_pixels=None,
             max_pixels=None,
-            backend="vllm",
             replicate_deployment=None,
-            replicate_api_token=None,
         ):
         self.dpi = dpi
 
-        # default args for vllm server
-        self.ip = ip
-        self.port = port
+        # backend configuration
+        self.backend = backend
+        self.base_url = base_url
+        self.api_token = api_token
         self.model_name = model_name
+        self.replicate_deployment = replicate_deployment
+        
         # default args for inference
         self.temperature = temperature
         self.top_p = top_p
@@ -46,10 +48,6 @@ class DotsOCRParser:
         self.num_thread = num_thread
         self.min_pixels = min_pixels
         self.max_pixels = max_pixels
-        # backend args
-        self.backend = backend
-        self.replicate_deployment = replicate_deployment
-        self.replicate_api_token = replicate_api_token
 
         if self.backend == "replicate":
             used = f"deployment '{self.replicate_deployment}'" if self.replicate_deployment else "public model sljeff/dots.ocr"
@@ -65,9 +63,9 @@ class DotsOCRParser:
         response = inference_with_vllm(
             image,
             prompt, 
+            base_url=self.base_url,
+            api_token=self.api_token,
             model_name=self.model_name,
-            ip=self.ip,
-            port=self.port,
             temperature=self.temperature,
             top_p=self.top_p,
             max_completion_tokens=self.max_completion_tokens,
@@ -80,7 +78,7 @@ class DotsOCRParser:
             image,
             prompt,
             deployment=self.replicate_deployment,
-            api_token=self.replicate_api_token,
+            api_token=self.api_token,
             temperature=self.temperature,
             top_p=self.top_p,
             max_completion_tokens=self.max_completion_tokens,
@@ -257,12 +255,8 @@ def main():
         help='should give this argument if you want to prompt_grounding_ocr'
     )
     parser.add_argument(
-        "--ip", type=str, default="localhost",
-        help=""
-    )
-    parser.add_argument(
-        "--port", type=int, default=8000,
-        help=""
+        "--base_url", type=str, default="http://127.0.0.1:8000",
+        help="Base URL for vLLM server (e.g., http://127.0.0.1:8000)"
     )
     parser.add_argument(
         "--model_name", type=str, default="model",
@@ -310,15 +304,16 @@ def main():
         help="replicate deployment name, e.g., owner/name; if not set, uses public model sljeff/dots.ocr"
     )
     parser.add_argument(
-        "--replicate_api_token", type=str, default=None,
-        help="replicate api token; if not set, reads from REPLICATE_API_TOKEN env"
+        "--api_token", type=str, default=None,
+        help="API token for the selected backend (required for both vllm and replicate)"
     )
 
     args = parser.parse_args()
 
     dots_ocr_parser = DotsOCRParser(
-        ip=args.ip,
-        port=args.port,
+        backend=args.backend,
+        base_url=args.base_url,
+        api_token=args.api_token,
         model_name=args.model_name,
         temperature=args.temperature,
         top_p=args.top_p,
@@ -327,9 +322,7 @@ def main():
         dpi=args.dpi,
         min_pixels=args.min_pixels,
         max_pixels=args.max_pixels,
-        backend=args.backend,
         replicate_deployment=args.replicate_deployment,
-        replicate_api_token=args.replicate_api_token,
     )
 
     result = dots_ocr_parser.parse_file(

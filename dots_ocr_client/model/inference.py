@@ -12,16 +12,21 @@ import os
 def inference_with_vllm(
         image,
         prompt, 
-        ip="localhost",
-        port=8000,
+        base_url="http://127.0.0.1:8000",
+        api_token=None,
         temperature=0.1,
         top_p=0.9,
         max_completion_tokens=32768,
         model_name='model',
         ):
     
-    addr = f"http://{ip}:{port}/v1"
-    client = OpenAI(api_key="{}".format(os.environ.get("API_KEY", "0")), base_url=addr)
+    # Ensure base_url ends with /v1
+    if not base_url.rstrip('/').endswith('/v1'):
+        base_url = f"{base_url.rstrip('/')}/v1"
+    
+    # Use provided token or default to "EMPTY" for self-hosted vLLM
+    api_key = api_token or "EMPTY"
+    client = OpenAI(api_key=api_key, base_url=base_url)
     messages = []
     messages.append(
         {
@@ -44,8 +49,8 @@ def inference_with_vllm(
             top_p=top_p)
         response = response.choices[0].message.content
         return response
-    except requests.exceptions.RequestException as e:
-        print(f"request error: {e}")
+    except Exception as e:
+        print(f"vLLM inference error: {e}")
         return None
 
 

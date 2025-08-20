@@ -34,7 +34,7 @@ def test_parse_image_with_replicate_public(mock_infer):
     img.save(tmp_path)
 
     try:
-        parser = DotsOCRParser(backend="replicate")
+        parser = DotsOCRParser(backend="replicate", api_token="test-token")
         results = parser.parse_image(tmp_path, "test", "prompt_layout_all_en", save_dir=None)
         assert isinstance(results, list) and len(results) == 1
         r = results[0]
@@ -72,6 +72,7 @@ def test_parse_image_with_replicate_deployment(mock_infer):
     try:
         parser = DotsOCRParser(
             backend="replicate",
+            api_token="test-token",
             replicate_deployment="owner/custom-deployment"
         )
         results = parser.parse_image(tmp_path, "test", "prompt_layout_all_en", save_dir=None)
@@ -152,7 +153,7 @@ def test_parse_pdf_with_replicate_multipage(mock_infer):
         doc.close()
     
     try:
-        parser = DotsOCRParser(backend="replicate", num_thread=2)
+        parser = DotsOCRParser(backend="replicate", api_token="test-token", num_thread=2)
         results = parser.parse_pdf(pdf_path, "test.pdf", "prompt_layout_all_en", save_dir=None)
         
         # Should have 3 pages of results

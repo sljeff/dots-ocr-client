@@ -6,17 +6,16 @@ A lightweight Python client for dots.ocr. Call either a self-hosted vLLM service
 
 ### Use with [Replicate](https://replicate.com/sljeff/dots.ocr)
 
-- First, [set your token](https://replicate.com/account/api-tokens).
-
-```bash
-export REPLICATE_API_TOKEN=...  # required
-```
+- First, get your [API token](https://replicate.com/account/api-tokens).
 
 ```python
 from dots_ocr_client.parser import DotsOCRParser
 
 # Default: use the public model sljeff/dots.ocr
-parser = DotsOCRParser(backend="replicate")
+parser = DotsOCRParser(
+    backend="replicate",
+    api_token="your-replicate-token"  # Required
+)
 results = parser.parse_file("/path/to/file.pdf", prompt_mode="prompt_layout_all_en")
 ```
 
@@ -32,10 +31,7 @@ For better performance and dedicated resources, you can create your own deployme
    - Choose your hardware configuration
    - Name your deployment (e.g., `yourname/dots-ocr`)
 
-2. **Set your API token:**
-```bash
-export REPLICATE_API_TOKEN=...  # Get from https://replicate.com/account/api-tokens
-```
+2. **Get your API token** from https://replicate.com/account/api-tokens
 
 3. **Use your deployment in code:**
 ```python
@@ -43,6 +39,7 @@ from dots_ocr_client.parser import DotsOCRParser
 
 parser = DotsOCRParser(
     backend="replicate",
+    api_token="your-api-token",               # Required
     replicate_deployment="yourname/dots-ocr",  # your deployment name
 )
 results = parser.parse_file("/path/to/file.pdf", prompt_mode="prompt_layout_all_en")
@@ -52,15 +49,15 @@ results = parser.parse_file("/path/to/file.pdf", prompt_mode="prompt_layout_all_
 
 ### Use with vLLM
 
-Prerequisite: have a running dots.ocr vLLM service (IP/port accessible).
+Prerequisite: have a running dots.ocr vLLM service.
 
 ```python
 from dots_ocr_client.parser import DotsOCRParser
 
 parser = DotsOCRParser(
     backend="vllm",
-    ip="localhost",
-    port=8000,
+    base_url="http://localhost:8000",  # Your vLLM server URL
+    api_token="your-api-token",       # Optional, depends on your setup
     model_name="model",
 )
 results = parser.parse_file("/path/to/file.pdf", prompt_mode="prompt_layout_all_en")
@@ -92,8 +89,9 @@ This is a client-only fork focusing on:
 Constructor:
 ```python
 DotsOCRParser(
-  ip: str = "localhost",
-  port: int = 8000,
+  backend: str = "vllm",                   # "vllm" or "replicate"
+  base_url: str = "http://127.0.0.1:8000", # for vLLM backend
+  api_token: str | None = None,            # API token for both backends
   model_name: str = "model",
   temperature: float = 0.1,
   top_p: float = 1.0,
@@ -102,7 +100,6 @@ DotsOCRParser(
   dpi: int = 200,
   min_pixels: int | None = None,
   max_pixels: int | None = None,
-  backend: str = "vllm",                 # "vllm" or "replicate"
   replicate_deployment: str | None = None, # if None and backend=replicate -> public model sljeff/dots.ocr
 )
 ```
