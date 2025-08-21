@@ -1,6 +1,3 @@
-import os
-import sys
-import json
 import re
 
 from PIL import Image

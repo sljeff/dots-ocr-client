@@ -1,1 +1,1 @@
-from .parser import DotsOCRParser
+from .parser import DotsOCRParser as DotsOCRParser

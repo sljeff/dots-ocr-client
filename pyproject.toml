@@ -11,7 +11,7 @@ dependencies = [
     "openai>=1.99.1",
     "pillow>=11.3.0",
     "pydantic>=2.11.7",
-    "pymupdf>=1.26.3",
+    "pypdfium2>=4.30.0",
     "replicate>=1.0.7",
     "requests>=2.32.4",
 ]

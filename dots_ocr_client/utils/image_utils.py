@@ -4,9 +4,9 @@ from PIL import Image
 from typing import Tuple
 import os
 from dots_ocr_client.utils.consts import IMAGE_FACTOR, MIN_PIXELS, MAX_PIXELS
-from dots_ocr_client.utils.doc_utils import fitz_doc_to_image
+from dots_ocr_client.utils.doc_utils import pdfium_doc_to_image
 from io import BytesIO
-import fitz
+import pypdfium2 as pdfium
 import requests
 import copy
 
@@ -168,7 +168,7 @@ def get_input_dimensions(
 
 
 def get_image_by_fitz_doc(image, target_dpi=200):
-    # get image through fitz, to get target dpi image, mainly for higher image
+    # get image through pypdfium2, to get target dpi image, mainly for higher image
     if not isinstance(image, Image.Image):
         assert isinstance(image, str)
         _, file_ext = os.path.splitext(image)
@@ -186,11 +186,16 @@ def get_image_by_fitz_doc(image, target_dpi=200):
     else:
         data_bytes = BytesIO()
         image.save(data_bytes, format='PNG')
+        data_bytes = data_bytes.getvalue()
 
     origin_dpi = image.info.get('dpi', None)
-    pdf_bytes = fitz.open(stream=data_bytes).convert_to_pdf()
-    doc = fitz.open('pdf', pdf_bytes)
-    page = doc[0]
-    image_fitz = fitz_doc_to_image(page, target_dpi=target_dpi, origin_dpi=origin_dpi)
+    # Convert image to PDF using pypdfium2, then render it back
+    # This maintains the DPI processing workflow similar to original
+    doc = pdfium.PdfDocument(data_bytes)
+    try:
+        page = doc[0]
+        image_fitz = pdfium_doc_to_image(page, target_dpi=target_dpi, origin_dpi=origin_dpi)
+    finally:
+        doc.close()
 
     return image_fitz

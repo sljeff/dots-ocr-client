@@ -1,8 +1,5 @@
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont
 from typing import Dict, List
-
-import fitz
-from io import BytesIO
 import json
 
 from dots_ocr_client.utils.image_utils import smart_resize
@@ -10,27 +7,49 @@ from dots_ocr_client.utils.consts import MIN_PIXELS, MAX_PIXELS
 from dots_ocr_client.utils.output_cleaner import OutputCleaner
 
 
+def _get_font(size):
+    """Get a font with cross-platform fallback"""
+    # Try common font paths for different platforms
+    font_paths = [
+        "arial.ttf",  # Windows
+        "/System/Library/Fonts/Helvetica.ttc",  # macOS
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",  # Linux
+    ]
+    
+    for path in font_paths:
+        try:
+            return ImageFont.truetype(path, size)
+        except (OSError, IOError):
+            continue
+    
+    # Final fallback to default font
+    try:
+        return ImageFont.load_default()
+    except:
+        return None
+
+
 # Define a color map (using RGBA format)
 dict_layout_type_to_color = {
-    "Text": (0, 128, 0, 256),  # Green, translucent
-    "Picture": (255, 0, 255, 256),  # Magenta, translucent
-    "Caption": (255, 165, 0, 256),  # Orange, translucent
-    "Section-header": (0, 255, 255, 256),  # Cyan, translucent
-    "Footnote": (0, 128, 0, 256),  # Green, translucent
-    "Formula": (128, 128, 128, 256),  # Gray, translucent
-    "Table": (255, 192, 203, 256),  # Pink, translucent
-    "Title": (255, 0, 0, 256),  # Red, translucent
-    "List-item": (0, 0, 255, 256),  # Blue, translucent
-    "Page-header": (0, 128, 0, 256),  # Green, translucent
-    "Page-footer":  (128, 0, 128, 256),  # Purple, translucent
-    "Other": (165, 42, 42, 256),  # Brown, translucent
+    "Text": (0, 128, 0, 255),  # Green, translucent
+    "Picture": (255, 0, 255, 255),  # Magenta, translucent
+    "Caption": (255, 165, 0, 255),  # Orange, translucent
+    "Section-header": (0, 255, 255, 255),  # Cyan, translucent
+    "Footnote": (0, 128, 0, 255),  # Green, translucent
+    "Formula": (128, 128, 128, 255),  # Gray, translucent
+    "Table": (255, 192, 203, 255),  # Pink, translucent
+    "Title": (255, 0, 0, 255),  # Red, translucent
+    "List-item": (0, 0, 255, 255),  # Blue, translucent
+    "Page-header": (0, 128, 0, 255),  # Green, translucent
+    "Page-footer":  (128, 0, 128, 255),  # Purple, translucent
+    "Other": (165, 42, 42, 255),  # Brown, translucent
     "Unknown": (0, 0, 0, 0),
 }
 
 
 def draw_layout_on_image(image, cells, resized_height=None, resized_width=None, fill_bbox=True, draw_bbox=True):
     """
-    Draw transparent boxes on an image.
+    Draw transparent boxes on an image using PIL ImageDraw.
     
     Args:
         image: The source PIL Image.
@@ -43,25 +62,15 @@ def draw_layout_on_image(image, cells, resized_height=None, resized_width=None, 
     Returns:
         PIL.Image: The image with drawings.
     """
-    # origin_image = Image.open(image_path)
+    # Create a copy of the original image to avoid modifying it
+    result_image = image.copy()
     original_width, original_height = image.size
-        
-    # Create a new PDF document
-    doc = fitz.open()
     
-    # Get image information
-    img_bytes = BytesIO()
-    image.save(img_bytes, format='PNG')
-    # pix = fitz.Pixmap(image_path)
-    pix = fitz.Pixmap(img_bytes)
+    # Create a drawing context
+    draw = ImageDraw.Draw(result_image)
     
-    # Create a page
-    page = doc.new_page(width=pix.width, height=pix.height)
-    page.insert_image(
-        fitz.Rect(0, 0, pix.width, pix.height), 
-        # filename=image_path
-        pixmap=pix
-        )
+    # Try to load a font, fallback to default if not available
+    font = _get_font(20)
 
     for i, cell in enumerate(cells):
         bbox = cell['bbox']
@@ -76,40 +85,42 @@ def draw_layout_on_image(image, cells, resized_height=None, resized_width=None, 
             top_left = (int(bbox[0] / scale_x), int(bbox[1] / scale_y))
             down_right = (int(bbox[2] / scale_x), int(bbox[3] / scale_y))
             
-        color = dict_layout_type_to_color.get(layout_type, (0, 128, 0, 256))
-        color = [col/255 for col in color[:3]]
-
+        color_rgba = dict_layout_type_to_color.get(layout_type, (0, 128, 0, 256))
+        # Convert to RGB for PIL (remove alpha)
+        color_rgb = color_rgba[:3]
+        
         x0, y0, x1, y1 = top_left[0], top_left[1], down_right[0], down_right[1]
-        rect_coords = fitz.Rect(x0, y0, x1, y1)
+        
         if draw_bbox:
             if fill_bbox:
-                page.draw_rect(
-                    rect_coords,
-                    color=None,
-                    fill=color,
-                    fill_opacity=0.3,
-                    width=0.5,
-                    overlay=True,
-                )  # Draw the rectangle
+                # Create a transparent overlay for fill effect
+                overlay = Image.new('RGBA', result_image.size, (0, 0, 0, 0))
+                overlay_draw = ImageDraw.Draw(overlay)
+                
+                # Draw filled rectangle with transparency
+                fill_color = (*color_rgb, int(0.3 * 255))  # 30% opacity
+                overlay_draw.rectangle([x0, y0, x1, y1], fill=fill_color)
+                
+                # Blend overlay with result image
+                result_image = Image.alpha_composite(result_image.convert('RGBA'), overlay).convert('RGB')
+                draw = ImageDraw.Draw(result_image)
+                
+                # Draw border
+                draw.rectangle([x0, y0, x1, y1], outline=color_rgb, width=1)
             else:
-                page.draw_rect(
-                    rect_coords,
-                    color=color,
-                    fill=None,
-                    fill_opacity=1,
-                    width=0.5,
-                    overlay=True,
-                )  # Draw the rectangle
+                # Draw only the border
+                draw.rectangle([x0, y0, x1, y1], outline=color_rgb, width=1)
+        
+        # Draw text label
         order_cate = f"{order}_{layout_type}"
-        page.insert_text(
-            (x1, y0 + 20), order_cate, fontsize=20, color=color
-        )  # Insert the index in the top left corner of the rectangle
+        text_pos = (x1, y0 + 20)
+        
+        if font:
+            draw.text(text_pos, order_cate, fill=color_rgb, font=font)
+        else:
+            draw.text(text_pos, order_cate, fill=color_rgb)
 
-    # Convert to a Pixmap (maintaining original dimensions)
-    mat = fitz.Matrix(1.0, 1.0)
-    pix = page.get_pixmap(matrix=mat)
-
-    return Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+    return result_image
 
 
 def pre_process_bboxes(

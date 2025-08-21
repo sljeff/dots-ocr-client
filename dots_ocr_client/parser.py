@@ -1,13 +1,12 @@
 import os
-import json
-from multiprocessing.pool import ThreadPool, Pool
+from multiprocessing.pool import ThreadPool
 import argparse
 
 
 from dots_ocr_client.model.inference import inference_with_vllm
 from dots_ocr_client.utils.consts import image_extensions, MIN_PIXELS, MAX_PIXELS
 from dots_ocr_client.utils.image_utils import get_image_by_fitz_doc, fetch_image, smart_resize
-from dots_ocr_client.utils.doc_utils import fitz_doc_to_image, load_images_from_pdf
+from dots_ocr_client.utils.doc_utils import load_images_from_pdf
 from dots_ocr_client.utils.prompts import dict_promptmode_to_prompt
 from dots_ocr_client.utils.layout_utils import post_process_output, draw_layout_on_image, pre_process_bboxes
 from dots_ocr_client.utils.format_transformer import layoutjson2md
@@ -109,6 +108,7 @@ class DotsOCRParser:
         page_idx=0, 
         bbox=None,
         fitz_preprocess=False,
+        draw_layout=False,
         ):
         min_pixels, max_pixels = self.min_pixels, self.max_pixels
         if prompt_mode == "prompt_grounding_ocr":
@@ -146,11 +146,14 @@ class DotsOCRParser:
                     'filtered': True
                 })
             else:
-                try:
-                    image_with_layout = draw_layout_on_image(origin_image, cells)
-                except Exception as e:
-                    print(f"Error drawing layout on image: {e}")
-                    image_with_layout = origin_image
+                if draw_layout:  # Only draw layout if requested
+                    try:
+                        image_with_layout = draw_layout_on_image(origin_image, cells)
+                    except Exception as e:
+                        print(f"Error drawing layout on image: {e}")
+                        image_with_layout = origin_image
+                else:
+                    image_with_layout = None
 
                 result.update({
                     'cells': cells,
@@ -171,13 +174,13 @@ class DotsOCRParser:
 
         return result
     
-    def parse_image(self, input_path, filename, prompt_mode, save_dir, bbox=None, fitz_preprocess=False):
+    def parse_image(self, input_path, filename, prompt_mode, save_dir, bbox=None, fitz_preprocess=False, draw_layout=False):
         origin_image = fetch_image(input_path)
-        result = self._parse_single_image(origin_image, prompt_mode, save_dir, filename, source="image", bbox=bbox, fitz_preprocess=fitz_preprocess)
+        result = self._parse_single_image(origin_image, prompt_mode, save_dir, filename, source="image", bbox=bbox, fitz_preprocess=fitz_preprocess, draw_layout=draw_layout)
         result['file_path'] = input_path
         return [result]
         
-    def parse_pdf(self, input_path, filename, prompt_mode, save_dir):
+    def parse_pdf(self, input_path, filename, prompt_mode, save_dir, draw_layout=False):
         print(f"loading pdf: {input_path}")
         images_origin = load_images_from_pdf(input_path, dpi=self.dpi)
         total_pages = len(images_origin)
@@ -189,6 +192,7 @@ class DotsOCRParser:
                 "save_name": filename,
                 "source":"pdf",
                 "page_idx": i,
+                "draw_layout": draw_layout,
             } for i, image in enumerate(images_origin)
         ]
 
@@ -213,15 +217,16 @@ class DotsOCRParser:
         input_path, 
         prompt_mode="prompt_layout_all_en",
         bbox=None,
-        fitz_preprocess=False
+        fitz_preprocess=False,
+        draw_layout=False
         ):
         filename, file_ext = os.path.splitext(os.path.basename(input_path))
         save_dir = None  # Not used anymore since we don't save files
 
         if file_ext == '.pdf':
-            results = self.parse_pdf(input_path, filename, prompt_mode, save_dir)
+            results = self.parse_pdf(input_path, filename, prompt_mode, save_dir, draw_layout=draw_layout)
         elif file_ext in image_extensions:
-            results = self.parse_image(input_path, filename, prompt_mode, save_dir, bbox=bbox, fitz_preprocess=fitz_preprocess)
+            results = self.parse_image(input_path, filename, prompt_mode, save_dir, bbox=bbox, fitz_preprocess=fitz_preprocess, draw_layout=draw_layout)
         else:
             raise ValueError(f"file extension {file_ext} not supported, supported extensions are {image_extensions} and pdf")
         
@@ -307,6 +312,10 @@ def main():
         "--api_token", type=str, default=None,
         help="API token for the selected backend (required for both vllm and replicate)"
     )
+    parser.add_argument(
+        "--draw-layout", action="store_true", 
+        help="Generate annotated images showing detected layout regions"
+    )
 
     args = parser.parse_args()
 
@@ -329,6 +338,7 @@ def main():
         args.input_path, 
         prompt_mode=args.prompt,
         bbox=args.bbox,
+        draw_layout=args.draw_layout,
         )
     
 
